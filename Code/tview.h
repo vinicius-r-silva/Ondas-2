@@ -3,7 +3,6 @@
 
 #include <QMainWindow>
 #include <QtWidgets>
-#include "animation.h"
 #include "graph.h"
 
 namespace Ui {
@@ -18,70 +17,51 @@ public:
     ~TView();
 
 private slots:
-    void on_tLine_textChanged(const QString &arg1);
-    void on_zLine_textChanged(const QString &arg1);
-
-    void on_firstV_clicked();
-    void on_secondV_clicked();
-
-    void on_firstR_clicked();
-    void on_secondR_clicked();
-    void on_thirdR_clicked();
-
     void on_BtRecalcular_clicked();
-
-    void on_dT_textChanged(const QString &arg1);
-    void on_nT_textChanged(const QString &arg1);
-    void on_dZ_textChanged(const QString &arg1);
-    void on_nZ_textChanged(const QString &arg1);
-
-    void updateZGraphic();
-    void updateTGraphic();
 
     bool parametersValid();
 
-    void on_SliderT_valueChanged();
-    void on_SliderZ_valueChanged();
+    void updateGraphic();
 
-    void animationZFinished();
-    void animationTFinished();
-    void updateZ(double d);
-    void updateT(double d);
+    void on_Slider_valueChanged();
 
-    void on_BtPlayT_clicked();
-    void on_BtPauseT_clicked();
-    void on_BtStopT_clicked();
+    void on_rb_square_clicked();
+    void on_rb_gauss_clicked();
 
-    void on_BtPlayZ_clicked();
-    void on_BtPauseZ_clicked();
-    void on_BtStopZ_clicked();
+    void on_rb_oneC_clicked();
+    void on_rb_twoC_clicked();
+    void on_rb_threeC_clicked();
 
-    void on_SlAnimationT_valueChanged(int value);
-    void on_SlAnimationZ_valueChanged(int value);
+    void on_pb_zApply_clicked();
+    void on_pb_zRestore_clicked();
+
+    void on_le_minX_textChanged(const QString &arg1);
+    void on_le_maxX_textChanged(const QString &arg1);
+
+    void on_le_n1_textChanged(const QString &arg1);
+    void on_le_n2_textChanged(const QString &arg1);
+    void on_le_n3_textChanged(const QString &arg1);
+    void on_le_s1_textChanged(const QString &arg1);
+    void on_le_s2_textChanged(const QString &arg1);
 
 private:
-    QThreadPool *thZ;
-    QThreadPool *thT;
+    QThreadPool *th;
     functionData_t *datas;
-    Animation *animZ;
-    Animation *animT;
     Ui::TView *ui;
     Graph *graphs;
 
     bool changed;
     bool startingUp;
-    double dtPrev;
-    double dzPrev;
-    double ntPrev;
-    double nzPrev;
-    double zFix;
-    double tFix;
-    double dt;
-    double dz;
-    double nt;
-    double nz;
-    int vol;
-    int res;
+    int pulse;
+    int lineNum;
+
+    double _minX, _maxX, _fix;
+    double _n1, _n2, _n3;
+    double _s1, _s2;
+
+    double _prMinX, _prMaxX, _prFix;
+    double _prn1, _prn2, _prn3;
+    double _prs1, _prs2;
 };
 
 #endif // TVIEW_H

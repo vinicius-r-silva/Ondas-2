@@ -14,8 +14,11 @@ private:
 
     double TFixed_vo(double z);
     double TFixed_ic(double z);
+    double TFixed_tw(double z);
+
     double ZFixed_vo(double t);
     double ZFixed_ic(double t);
+    double ZFixed_tw(double t);
 
     int width;
     int height;
@@ -37,6 +40,7 @@ private:
         char xLabel[2];
         double (Graph::*voltage)(double);
         double (Graph::*current)(double);
+        double (Graph::*thWave)(double);
 
         double max_x;
     };

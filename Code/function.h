@@ -19,6 +19,9 @@
 #define DEGRAU 0
 #define CONTINUA 1
 
+#define SQUARE 0
+#define GAUSS 1
+
 #define ZERO 0
 #define CEM 1
 #define INFINITA 2
@@ -47,9 +50,9 @@ double stepFunction(int nt);
 double pulseFunction(int nt);
 
 void freeMemory(functionData_t* functionData);
-functionData_t* allocMemory(int vol, int res, double dt, double nt, double dz, double nz);
+functionData_t* allocMemory(int pulse, int lineNum, double dt, double nt);
 double initialFunction(double t);
-functionData_t* calculateAllValues(functionData_t* functionData, int vol, int res, double dt, double nt, double dz, double nz);
+functionData_t* calculateAllValues(functionData_t* functionData, int pulse, int lineNum, double dt, double nt, double dz, double nz);
 
 double getCurrent(functionData_t* functionData, double t, double z, double dt, double dz);
 double getVoltage(functionData_t* functionData, double t, double z, double dt, double dz);

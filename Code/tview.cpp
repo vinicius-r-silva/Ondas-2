@@ -4,77 +4,44 @@
 #include <iostream>
 
 #define MAXMEMORY 2000000000 //2GB
-#define ZDELAY 1
-#define TDELAY 1 // 10000*n -> n seconds
+#define DELAY 1 // 10000*n -> n seconds
 #define NDELAY 100000         // n times to animation
+#define MAX_X 400.0
+#define _DX 0.5
+#define MAX_Y 5
+#define MIN_Y -5
 
 TView::TView(QWidget *parent) : QMainWindow(parent),
     ui(new Ui::TView){
+
     //////////////////////////////////////////////////////////////////////////////////////////
     // SET THE UI PARAMETERS AND SOME ICONS TO INTERFACE
+    ui->setupUi(this);
+    this->setWindowTitle("Scalar Waves");
 
     startingUp = true;
-    ui->setupUi(this);
-
-    this->setStyleSheet("background-color: white;");
-
-    QSize iconsSize(46, 46);
-
-    ui->firstV->setIcon(QIcon(":/icons/firstV.png"));
-    ui->secondV->setIcon(QIcon(":/icons/secondV.png"));
-    ui->firstR->setIcon(QIcon(":/icons/firstR.png"));
-    ui->secondR->setIcon(QIcon(":/icons/secondR.png"));
-    ui->thirdR->setIcon(QIcon(":/icons/thirdR.png"));
-
-    ui->BtPauseT->setIcon(QIcon(":/icons/small_pause.png"));
-    ui->BtPauseZ->setIcon(QIcon(":/icons/small_pause.png"));
-    ui->BtPlayT->setIcon(QIcon(":/icons/small_play.png"));
-    ui->BtPlayZ->setIcon(QIcon(":/icons/small_play.png"));
-    ui->BtStopT->setIcon(QIcon(":/icons/small_stop.png"));
-    ui->BtStopZ->setIcon(QIcon(":/icons/small_stop.png"));
-
-    ui->firstV->setIconSize(iconsSize);
-    ui->secondV->setIconSize(QSize(120, 180));
-    ui->firstR->setIconSize(iconsSize);
-    ui->secondR->setIconSize(iconsSize);
-    ui->thirdR->setIconSize(iconsSize);
-
-    this->setWindowTitle("Transmission Lines");
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // SET INITIAL PARAMETERS INTO THE INTERFACE
 
-    animT = nullptr;
-    animZ = nullptr;
+    anim = nullptr;
 
-    vol = CONTINUA;
-    res = CEM;
+    lineNum = 0;
+    _fix = 0;
 
-    zFix = 0;
-    tFix = 0;
+    ui->le_maxX->setText(QString::number(MAX_X));
+    ui->le_maxX->setText(QString::number(0));
 
-    ui->zLine->setText(QString::number(zFix));
-    ui->tLine->setText(QString::number(tFix));
+    ui->le_Line->setText(QString::number(0));
+    ui->SlAnimation->setValue(100);
 
-    ui->dT->setText(QString::number(1));
-    //ui->nT->setText(QString::number(0.000005));
-    ui->dZ->setText(QString::number(1));
-    ui->nZ->setText(QString::number(200));
-    ui->nT->setText(QString::number(200));
-    
-    dtPrev = dt;
-    ntPrev = nt;
-    dzPrev = dz;
-    nzPrev = nz;
+    ui->rb_square->setChecked(true);
+    ui->rb_oneC->setChecked(true);
 
-    ui->SlAnimationT->setValue(100);
-    ui->SlAnimationZ->setValue(100);
-
-    ui->firstV->setChecked(true);
-    ui->thirdR->setChecked(true);
-
-    ui->SliderT->setMaximum(nt);
-    ui->SliderZ->setMaximum(nz);
+    ui->pb_zRestore->setEnabled(false);
+    ui->le_n2->setEnabled(false);
+    ui->le_n3->setEnabled(false);
+    ui->le_s2->setEnabled(false);
 
     changed = false;
 
@@ -82,29 +49,16 @@ TView::TView(QWidget *parent) : QMainWindow(parent),
     // MAKE THE OBJECTS AND THREADS
 
     datas = NULL;
-    datas = allocMemory(vol, res, dt, nt, dz, nz);
-    graphs = new Graph(datas, ui->zGraphic->width(), ui->zGraphic->height(), nt, nz, dt, dz);
+    datas = allocMemory(pulse, lineNum, _DX, MAX_X);
+    graphs = new Graph(datas, ui->l_Graphic->width(), ui->l_Graphic->height(), MAX_X, _DX);
 
-    thZ = new QThreadPool();
-    thT = new QThreadPool();
-
-    thZ->setExpiryTimeout(-1);
-    thT->setExpiryTimeout(-1);
-
-    animT = new Animation(0.0, nz, NDELAY, (double)(ui->SlAnimationT->value() * TDELAY));
-    animZ = new Animation(0.0, nt, NDELAY, (double)(ui->SlAnimationZ->value() * ZDELAY));
-
-    QObject::connect(animZ, SIGNAL(Tfinished()), this, SLOT(animationZFinished()));
-    QObject::connect(animZ, SIGNAL(updateGraphic(double)), this, SLOT(updateZ(double)));
-    QObject::connect(animT, SIGNAL(Tfinished()), this, SLOT(animationTFinished()));
-    QObject::connect(animT, SIGNAL(updateGraphic(double)), this, SLOT(updateT(double)));
+    th = new QThreadPool();
+    th->setExpiryTimeout(-1);
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // UPDATE THE GRAPHICS
 
-    updateTGraphic();
-    updateZGraphic();
-
+    //updateGraphic();
     startingUp = false;
 }
 
@@ -113,130 +67,32 @@ TView::~TView() {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
-//ANIMATIONS FUNCTIONS
-
-void TView::updateZ(double d){
-    ui->SliderT->setValue(d);
-}
-
-void TView::updateT(double d){
-    ui->SliderZ->setValue(d);
-}
-
-void TView::animationZFinished(){
-    ui->SliderT->setValue(0);
-}
-
-void TView::animationTFinished(){
-    ui->SliderZ->setValue(0);
-}
-
-void TView::on_SlAnimationT_valueChanged(int value){
-    if(animT != nullptr)
-        animT->setDelay((double)(value * TDELAY));
-}
-
-void TView::on_SlAnimationZ_valueChanged(int value){
-    if(animZ != nullptr)
-        animZ->setDelay((double)(value * ZDELAY));
-}
-
-void TView::on_BtPlayT_clicked(){
-    if(thT->activeThreadCount() == 0){
-        std::cout << "Iniciando a thread do T\n";
-        thT->tryStart(animT);
-    }else if(!animT->getRunning()){
-        animT->setRunning(true);
-    }
-}
-
-void TView::on_BtPlayZ_clicked(){
-    if(thZ->activeThreadCount() == 0){
-        std::cout << "Iniciando a thread do Z\n";
-        thZ->tryStart(animZ);
-    }else if(!animZ->getRunning()){
-        animZ->setRunning(true);
-    }
-}
-
-void TView::on_BtPauseT_clicked(){
-    if(thT->activeThreadCount() > 0){
-        animT->setRunning(false);
-    }
-}
-
-void TView::on_BtPauseZ_clicked(){
-    if(thZ->activeThreadCount() > 0){
-        animZ->setRunning(false);
-    }
-}
-
-void TView::on_BtStopT_clicked(){
-    if(thT->activeThreadCount() > 0){
-        animT->setEnding();
-        animT->setRunning(true);
-    }
-}
-
-void TView::on_BtStopZ_clicked(){
-    if(thZ->activeThreadCount() > 0){
-        animZ->setEnding();
-        animZ->setRunning(true);
-    }
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////
-// UPDATES FUNCTIONS
+//
 
 bool TView::parametersValid(){
-    int n = (int)(nt/dt) * (int)(nz/dz);
-
-    if((long int)8 * n > MAXMEMORY){
-        return false;
-    }
-
-    return true;
+    int n;
 }
 
-void TView::updateTGraphic(){
-    cv::Mat img = graphs->TFixed_Graph(tFix);
-    ui->tGraphic->setPixmap(QPixmap::fromImage(QImage(img.data, img.cols, img.rows, img.step, QImage::Format_RGB888)));
-}
-
-void TView::updateZGraphic(){
-    cv::Mat img = graphs->ZFixed_Graph(zFix);
-    ui->zGraphic->setPixmap(QPixmap::fromImage(QImage(img.data, img.cols, img.rows, img.step, QImage::Format_RGB888)));
+void TView::updateGraphic(){
+  //  cv::Mat img = graphs->TFixed_Graph(fix);
+  //  ui->l_Graphic->setPixmap(QPixmap::fromImage(QImage(img.data, img.cols, img.rows, img.step, QImage::Format_RGB888)));
 }
 
 void TView::on_BtRecalcular_clicked(){
     if(changed && !startingUp){
         if(parametersValid()){
-            if(thT->activeThreadCount() > 0){
-                animT->setEnding();
-                animT->setRunning(true);
-            }
-
-            if(thZ->activeThreadCount() > 0){
-                animZ->setEnding();
-                animZ->setRunning(true);
+            if(th->activeThreadCount() > 0){
+                anim->setEnding();
+                anim->setRunning(true);
             }
 
             changed = false;
-            freeMemory(datas);
-            datas = allocMemory(vol, res, dt, nt, dz, nz);
-            graphs->updateParameters(datas, nt, nz, dt, dz);
-            updateTGraphic();
-            updateZGraphic();
-            dtPrev = dt;
-            ntPrev = nt;
-            dzPrev = dz;
-            nzPrev = nz;
+            //freeMemory(datas);
+            //datas = allocMemory(vol, res, dt, nt, dz, nz);
+            //graphs->updateParameters(datas, nt, nz, dt, dz);
+            //updateGraphic();
         }else{
             QMessageBox::warning(this, tr("ERROR BOX"), tr("Parametros ultrapassam o limite da memória"));
-            ui->dT->setText(QString::number(dtPrev));
-            ui->nT->setText(QString::number(ntPrev));
-            ui->dZ->setText(QString::number(dzPrev));
-            ui->nZ->setText(QString::number(nzPrev));
             changed = false;
         }
     }
@@ -244,60 +100,91 @@ void TView::on_BtRecalcular_clicked(){
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////
-// PARAMETERS FUNCTIONS
+//
 
-void TView::on_firstV_clicked(){
-    if(ui->firstV->isChecked() && vol != CONTINUA){
-        vol = CONTINUA;
+void TView::on_rb_square_clicked(){
+    if(pulse != SQUARE){
+        pulse = SQUARE;
         changed = true;
-        on_BtRecalcular_clicked();
     }
 }
 
-void TView::on_secondV_clicked(){
-    if(ui->secondV->isChecked() && vol != DEGRAU){
-        vol = DEGRAU;
+void TView::on_rb_gauss_clicked(){
+    if(pulse != GAUSS){
+        pulse = GAUSS;
         changed = true;
-        on_BtRecalcular_clicked();
+    }
+
+}
+
+void TView::on_rb_oneC_clicked(){
+    if(lineNum != 1){
+        lineNum = 1;
+        changed = true;
+        ui->le_n2->setEnabled(false);
+        ui->le_n3->setEnabled(false);
+        ui->le_s2->setEnabled(false);
     }
 }
 
-void TView::on_firstR_clicked(){
-    if(ui->firstR->isChecked() && res != INFINITA){
-       res = INFINITA;
+void TView::on_rb_twoC_clicked(){
+    if(lineNum != 2){
+        lineNum = 2;
         changed = true;
-        on_BtRecalcular_clicked();
+        ui->le_n2->setEnabled(false);
+        ui->le_n3->setEnabled(false);
+        ui->le_s2->setEnabled(true);
     }
 }
 
-void TView::on_secondR_clicked(){
-    if(ui->secondR->isChecked() && res != ZERO){
-        res = ZERO;
+void TView::on_rb_threeC_clicked(){
+    if(lineNum != 3){
+        lineNum = 3;
         changed = true;
-        on_BtRecalcular_clicked();
-    }
-}
-
-void TView::on_thirdR_clicked(){
-    if(ui->thirdR->isChecked() && res != CEM){
-        res = CEM;
-        changed = true;
-        on_BtRecalcular_clicked();
+        ui->le_n2->setEnabled(true);
+        ui->le_n3->setEnabled(true);
+        ui->le_s2->setEnabled(false);
     }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
-// GRAPHICS Z AND T FIX PARAMETERS FUNCTIONS
+//
 
-void TView::on_SliderT_valueChanged(){
-    ui->tLine->setText(QString::number(double(ui->SliderT->value())));
+void TView::on_Slider_valueChanged(){
+    ui->l_Line->setText(QString::number(double(ui->Slider->value())));
 }
 
-void TView::on_SliderZ_valueChanged(){
-    ui->zLine->setText(QString::number(double(ui->SliderZ->value())));
+void TView::on_pb_zApply_clicked(){
+    ui->pb_zRestore->setEnabled(true);
 }
 
-void TView::on_zLine_textChanged(const QString &arg1){
+void TView::on_pb_zRestore_clicked(){
+    ui->pb_zRestore->setEnabled(false);
+    ui->le_maxX->setText(QString::number(MAX_X));
+    ui->le_maxX->setText(QString::number(0));
+}
+
+void TView::on_le_minX_textChanged(const QString &arg1){
+        std::string edit = arg1.toStdString();
+
+        if(arg1.contains('.')){
+            int index = arg1.indexOf('.');
+            edit.replace(uint32_t(index), 1, ",");
+        }
+
+        double minX;
+        try{
+            minX = std::stod(edit);
+
+            if(minX != _minX);
+                _minX = minX;
+
+        }catch(std::invalid_argument e){
+        }catch(std::out_of_range e2){
+        }
+}
+
+void TView::on_le_maxX_textChanged(const QString &arg1){
     std::string edit = arg1.toStdString();
 
     if(arg1.contains('.')){
@@ -305,20 +192,19 @@ void TView::on_zLine_textChanged(const QString &arg1){
         edit.replace(uint32_t(index), 1, ",");
     }
 
-    double fixZ;
+    double maxX;
     try{
-        fixZ = std::stod(edit);
+        maxX = std::stod(edit);
 
-        if(fixZ != zFix){
-            zFix = fixZ;
-            updateZGraphic();
-        }
+        if(maxX != _maxX);
+            _maxX = maxX;
+
     }catch(std::invalid_argument e){
     }catch(std::out_of_range e2){
     }
 }
 
-void TView::on_tLine_textChanged(const QString &arg1){
+void TView::on_le_n1_textChanged(const QString &arg1){
     std::string edit = arg1.toStdString();
 
     if(arg1.contains('.')){
@@ -326,23 +212,18 @@ void TView::on_tLine_textChanged(const QString &arg1){
         edit.replace(uint32_t(index), 1, ",");
     }
 
-    double fixT;
+    double n1;
     try{
-        fixT = std::stod(edit);
+        n1 = std::stod(edit);
+        if(n1 != _n1);
+            _n1 = n1;
 
-        if(fixT != tFix){
-            tFix = fixT;
-            updateTGraphic();
-        }
     }catch(std::invalid_argument e){
     }catch(std::out_of_range e2){
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////
-// ADVANCED FUNCTIONS
-
-void TView::on_dT_textChanged(const QString &arg1){
+void TView::on_le_n2_textChanged(const QString &arg1){
     std::string edit = arg1.toStdString();
 
     if(arg1.contains('.')){
@@ -350,24 +231,18 @@ void TView::on_dT_textChanged(const QString &arg1){
         edit.replace(uint32_t(index), 1, ",");
     }
 
-    double dT;
+    double n2;
     try{
-        dT = std::stod(edit);
-
-        if(dT != dt && dT != 0){
-            dt = dT;
-            changed = true;
-            on_BtRecalcular_clicked();
-        }
+        n2 = std::stod(edit);
+        if(n2 != _n2);
+            _n2 = n2;
 
     }catch(std::invalid_argument e){
-
     }catch(std::out_of_range e2){
-
     }
 }
 
-void TView::on_nT_textChanged(const QString &arg1){
+void TView::on_le_n3_textChanged(const QString &arg1){
     std::string edit = arg1.toStdString();
 
     if(arg1.contains('.')){
@@ -375,23 +250,18 @@ void TView::on_nT_textChanged(const QString &arg1){
         edit.replace(uint32_t(index), 1, ",");
     }
 
-    double nT;
+    double n3;
     try{
-        nT = std::stod(edit);
+        n3 = std::stod(edit);
+        if(n3 != _n3);
+            _n3 = n3;
 
-        if(nT != nt && nT != 0){
-            nt = nT;
-            changed = true;
-            on_BtRecalcular_clicked();
-        }
     }catch(std::invalid_argument e){
-
     }catch(std::out_of_range e2){
-
     }
 }
 
-void TView::on_dZ_textChanged(const QString &arg1){
+void TView::on_le_s1_textChanged(const QString &arg1){
     std::string edit = arg1.toStdString();
 
     if(arg1.contains('.')){
@@ -399,24 +269,18 @@ void TView::on_dZ_textChanged(const QString &arg1){
         edit.replace(uint32_t(index), 1, ",");
     }
 
-    double dZ;
+    double s1;
     try{
-        dZ = std::stod(edit);
+        s1 = std::stod(edit);
+        if(s1 != _s1);
+            _s1 = s1;
 
-        if(dZ != dz && dZ != 0){
-            dz = dZ;
-            changed = true;
-            on_BtRecalcular_clicked();
-        }
     }catch(std::invalid_argument e){
-
     }catch(std::out_of_range e2){
-
     }
-
 }
 
-void TView::on_nZ_textChanged(const QString &arg1){
+void TView::on_le_s2_textChanged(const QString &arg1){
     std::string edit = arg1.toStdString();
 
     if(arg1.contains('.')){
@@ -424,20 +288,14 @@ void TView::on_nZ_textChanged(const QString &arg1){
         edit.replace(uint32_t(index), 1, ",");
     }
 
-    double nZ;
+    double s2;
     try{
-        nZ = std::stod(edit);
-        if(nZ != nz && nZ != 0){
-            nz = nZ;
-            changed = true;
-            on_BtRecalcular_clicked();
-        }
+        s2 = std::stod(edit);
+
+        if(s2 != _s2);
+            _s2 = s2;
 
     }catch(std::invalid_argument e){
-
     }catch(std::out_of_range e2){
-
     }
 }
-
-

@@ -28,8 +28,6 @@ add_executable(TLine_Viewer
   graph.h
   function.h
   function.cpp
-  animation.cpp
-  animation.h
 )
 
 target_link_libraries(TLine_Viewer PRIVATE Qt5::Widgets ${OpenCV_LIBS})
